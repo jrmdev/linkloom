@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ app_name }}{% block title %}{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ll-bg: #f4f7fb;
+      --ll-ink: #1f2d3d;
+      --ll-sidebar: #1f2430;
+      --ll-sidebar-soft: #2b3242;
+      --ll-accent: #1f75cb;
+      --ll-accent-2: #fc6d26;
+      --ll-danger: #d6453d;
+    }
+    body {
+      font-family: "Source Sans 3", sans-serif;
+      color: var(--ll-ink);
+      background: linear-gradient(180deg, #f8fafc 0%, var(--ll-bg) 100%);
+      min-height: 100vh;
+    }
+    .mono { font-family: "JetBrains Mono", monospace; }
+    .card { backdrop-filter: blur(2px); }
+  </style>
+</head>
+<body>
+  {% if current_user.is_authenticated %}
+    {% set endpoint = request.endpoint or "" %}
+    <div class="min-h-screen lg:flex">
+      <aside class="w-full lg:w-64 lg:min-h-screen border-r border-slate-700/70" style="background: var(--ll-sidebar);">
+        <div class="px-5 py-4 border-b border-slate-700/70 flex items-center justify-between">
+          <a href="{{ url_for('web.dashboard') }}" class="text-slate-100 font-semibold text-lg tracking-tight">{{ app_name }}</a>
+          <span class="text-[11px] uppercase tracking-wide text-slate-400 mono">Workspace</span>
+        </div>
+        <nav class="px-3 py-4 space-y-1 text-sm">
+          <a href="{{ url_for('web.dashboard') }}" class="block px-3 py-2 rounded-lg {% if endpoint == 'web.dashboard' %}text-white{% else %}text-slate-300 hover:text-white{% endif %}" style="background: {% if endpoint == 'web.dashboard' %}var(--ll-sidebar-soft){% else %}transparent{% endif %};">Dashboard</a>
+          <a href="{{ url_for('web.bookmarks') }}" class="block px-3 py-2 rounded-lg {% if endpoint.startswith('web.bookmarks') or endpoint.startswith('web.search') %}text-white{% else %}text-slate-300 hover:text-white{% endif %}" style="background: {% if endpoint.startswith('web.bookmarks') or endpoint.startswith('web.search') %}var(--ll-sidebar-soft){% else %}transparent{% endif %};">Bookmarks</a>
+          <a href="{{ url_for('web.folders_page') }}" class="block px-3 py-2 rounded-lg {% if endpoint.startswith('web.folders') %}text-white{% else %}text-slate-300 hover:text-white{% endif %}" style="background: {% if endpoint.startswith('web.folders') %}var(--ll-sidebar-soft){% else %}transparent{% endif %};">Folders</a>
+          <a href="{{ url_for('web.import_bookmarks') }}" class="block px-3 py-2 rounded-lg {% if endpoint.startswith('web.import_bookmarks') or endpoint.startswith('web.import_job_status_web') %}text-white{% else %}text-slate-300 hover:text-white{% endif %}" style="background: {% if endpoint.startswith('web.import_bookmarks') or endpoint.startswith('web.import_job_status_web') %}var(--ll-sidebar-soft){% else %}transparent{% endif %};">Import</a>
+          <a href="{{ url_for('web.dead_links') }}" class="block px-3 py-2 rounded-lg {% if endpoint.startswith('web.dead_links') or endpoint.startswith('web.dead_link_job_status_web') %}text-white{% else %}text-slate-300 hover:text-white{% endif %}" style="background: {% if endpoint.startswith('web.dead_links') or endpoint.startswith('web.dead_link_job_status_web') %}var(--ll-sidebar-soft){% else %}transparent{% endif %};">Dead Links</a>
+          <a href="{{ url_for('web.recycle_bin') }}" class="block px-3 py-2 rounded-lg {% if endpoint.startswith('web.recycle') %}text-white{% else %}text-slate-300 hover:text-white{% endif %}" style="background: {% if endpoint.startswith('web.recycle') %}var(--ll-sidebar-soft){% else %}transparent{% endif %};">Recycle Bin</a>
+          <a href="{{ url_for('web.tokens') }}" class="block px-3 py-2 rounded-lg {% if endpoint.startswith('web.tokens') or endpoint.startswith('web.revoke_token') %}text-white{% else %}text-slate-300 hover:text-white{% endif %}" style="background: {% if endpoint.startswith('web.tokens') or endpoint.startswith('web.revoke_token') %}var(--ll-sidebar-soft){% else %}transparent{% endif %};">Tokens</a>
+          {% if current_user.is_admin %}
+          <a href="{{ url_for('web.admin_users') }}" class="block px-3 py-2 rounded-lg {% if endpoint.startswith('web.admin_users') %}text-white{% else %}text-slate-300 hover:text-white{% endif %}" style="background: {% if endpoint.startswith('web.admin_users') %}var(--ll-sidebar-soft){% else %}transparent{% endif %};">Users</a>
+          {% endif %}
+        </nav>
+        <div class="px-3 pb-4">
+          <form action="{{ url_for('auth.logout') }}" method="post">
+            <button class="w-full px-3 py-2 rounded-lg text-white" style="background: var(--ll-accent-2);">Logout</button>
+          </form>
+        </div>
+      </aside>
+
+      <div class="flex-1 min-w-0">
+        <header class="h-14 border-b border-slate-200 bg-white/90 backdrop-blur px-6 flex items-center justify-between">
+          <p class="text-sm text-slate-600">{{ current_user.username }}</p>
+          <p class="mono text-xs text-slate-500">LinkLoom</p>
+        </header>
+        <main class="px-4 py-6 lg:px-8 lg:py-8">
+  {% else %}
+        <main class="max-w-5xl mx-auto px-4 py-8">
+  {% endif %}
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="space-y-2 mb-6">
+      {% for category, message in messages %}
+        <div class="px-4 py-3 rounded-lg text-sm {% if category == 'error' %}bg-red-50 text-red-800 border border-red-200{% else %}bg-blue-50 text-blue-900 border border-blue-200{% endif %}">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+
+  {% if current_user.is_authenticated %}
+        </main>
+      </div>
+    </div>
+  {% else %}
+    </main>
+  {% endif %}
+</body>
+</html>

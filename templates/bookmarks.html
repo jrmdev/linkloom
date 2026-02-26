@@ -1,0 +1,411 @@
+{% extends "base.html" %}
+{% block title %} · Bookmarks{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+  <div>
+    <h1 class="text-3xl font-bold">Bookmarks</h1>
+    <p class="text-slate-600">Manage links, tags, categories, and content indexing.</p>
+  </div>
+  <a href="{{ url_for('web.bookmarks_new') }}" class="text-white px-4 py-2.5 rounded-xl" style="background: var(--ll-accent);">Add Bookmark</a>
+</div>
+
+<form id="bookmark-filter-form" method="get" class="card bg-white/90 border border-slate-200 rounded-xl p-4 mb-5 grid lg:grid-cols-5 gap-3">
+  <input id="bookmark-search-input" type="text" name="q" value="{{ q }}" placeholder="Search bookmarks, tags, notes, content..." class="border border-slate-300 rounded-lg px-3 py-2 bg-white" autocomplete="off">
+  <select id="bookmark-folder-select" name="folder_id" class="border border-slate-300 rounded-lg px-3 py-2 bg-white">
+    <option value="">All folders</option>
+    {% for folder in folder_options %}
+    <option value="{{ folder.id }}" {% if active_folder_id == folder.id %}selected{% endif %}>{{ folder.label }}</option>
+    {% endfor %}
+  </select>
+  <select id="bookmark-tag-select" name="tag" class="border border-slate-300 rounded-lg px-3 py-2 bg-white">
+    <option value="">All tags</option>
+    {% for tag in tags %}
+    <option value="{{ tag.name }}" {% if active_tag == tag.name %}selected{% endif %}>{{ tag.name }}</option>
+    {% endfor %}
+  </select>
+  <select id="bookmark-status-select" name="status" class="border border-slate-300 rounded-lg px-3 py-2 bg-white">
+    <option value="">All statuses</option>
+    {% for status in status_options %}
+    <option value="{{ status }}" {% if active_status == status %}selected{% endif %}>{{ status.replace('_', ' ') }}</option>
+    {% endfor %}
+  </select>
+  <div class="flex gap-2">
+    <button class="rounded-lg px-4 py-2 text-white" style="background: var(--ll-accent-2);">Apply Filters</button>
+    <a href="{{ url_for('web.bookmarks') }}" class="rounded-lg px-4 py-2 bg-slate-100">Clear</a>
+  </div>
+</form>
+
+{% set current_page_url = request.full_path if request.query_string else request.path %}
+<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+  <p id="bookmarks-selection-count" class="text-sm text-slate-600">0 selected</p>
+  <div class="flex flex-wrap items-center justify-end gap-2">
+    <button id="bookmarks-select-all" type="button" class="rounded-lg px-3 py-2 bg-slate-100">Select All Displayed</button>
+    <div id="bookmarks-bulk-actions" class="hidden flex flex-wrap items-center gap-2">
+      <form action="{{ url_for('web.bookmarks_move_selected') }}" method="post" class="inline-flex items-center gap-2">
+        <input type="hidden" name="next" value="{{ current_page_url }}" data-bookmarks-next-input>
+        <div data-bookmarks-selected-inputs></div>
+        <select name="folder_id" class="border border-slate-300 rounded-lg px-3 py-2 bg-white">
+          <option value="">No folder</option>
+          {% for folder in folder_options %}
+          <option value="{{ folder.id }}">{{ folder.label }}</option>
+          {% endfor %}
+        </select>
+        <button data-bookmarks-bulk-button class="rounded-lg px-3 py-2 text-white disabled:opacity-60 disabled:cursor-not-allowed" style="background: var(--ll-accent-2);" disabled>Move Selected</button>
+      </form>
+      <form action="{{ url_for('web.bookmarks_add_tags_selected') }}" method="post" class="inline-flex items-center gap-2">
+        <input type="hidden" name="next" value="{{ current_page_url }}" data-bookmarks-next-input>
+        <div data-bookmarks-selected-inputs></div>
+        <input name="tags" type="text" placeholder="tag1, tag2" class="border border-slate-300 rounded-lg px-3 py-2 bg-white">
+        <button data-bookmarks-bulk-button class="rounded-lg px-3 py-2 text-white disabled:opacity-60 disabled:cursor-not-allowed" style="background: var(--ll-accent);" disabled>Add Tags</button>
+      </form>
+      <form id="bookmarks-delete-selected-form" action="{{ url_for('web.bookmarks_delete_selected') }}" method="post" class="inline-flex items-center">
+        <input type="hidden" name="next" value="{{ current_page_url }}" data-bookmarks-next-input>
+        <div data-bookmarks-selected-inputs></div>
+        <button id="bookmarks-delete-selected" data-bookmarks-bulk-button class="rounded-lg px-3 py-2 text-white disabled:opacity-60 disabled:cursor-not-allowed" style="background: var(--ll-danger);" disabled>Delete Selected</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div id="bookmarks-results" class="space-y-3">
+  {% for item in items %}
+  <article data-bookmark-card data-bookmark-id="{{ item.id }}" class="card bg-white/90 border border-slate-200 rounded-xl p-4 transition-colors duration-150">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div class="min-w-0 flex-1 flex items-start gap-3">
+        <input type="checkbox" data-bookmark-select value="{{ item.id }}" class="mt-1.5 h-4 w-4 rounded border-slate-300">
+        <div class="min-w-0">
+        {% set folder_parts = bookmark_folder_paths.get(item.id) if bookmark_folder_paths else [] %}
+        <p class="mono text-[11px] uppercase tracking-wide text-slate-500 mb-1">{{ folder_parts | join(' / ') if folder_parts else 'Root' }}</p>
+        <h2 class="font-semibold text-lg">{{ item.title or "(untitled)" }}</h2>
+        <a href="{{ item.url }}" target="_blank" class="text-slate-600 hover:underline break-all">{{ item.url }}</a>
+        <div class="mt-2 flex flex-wrap gap-2 text-xs">
+          {% if item.folder %}
+            <span class="px-2 py-1 rounded-full bg-slate-100">{{ item.folder.name }}</span>
+          {% endif %}
+          {% for tag in item.tags %}
+            <span class="px-2 py-1 rounded-full bg-emerald-100 text-emerald-800">#{{ tag.name }}</span>
+          {% endfor %}
+          {% if item.link_status %}
+            <span class="px-2 py-1 rounded-full bg-amber-100 text-amber-800">{{ item.link_status.replace('_', ' ') }}</span>
+          {% endif %}
+        </div>
+        {% set match = search_meta.get(item.id) if search_meta else None %}
+        {% if match %}
+        <p class="mono text-xs text-slate-500 mt-2">Score {{ match.score }} - {{ match.reasons | join(', ') }}</p>
+        {% endif %}
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="{{ url_for('web.bookmarks_edit', bookmark_id=item.id, next=current_page_url) }}" class="px-3 py-1.5 rounded-lg bg-slate-100">Edit</a>
+        <form action="{{ url_for('web.bookmarks_delete', bookmark_id=item.id) }}" method="post">
+          <input type="hidden" name="next" value="{{ current_page_url }}">
+          <button class="px-3 py-1.5 rounded-lg text-white" style="background: var(--ll-danger);">Delete</button>
+        </form>
+      </div>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+
+<div id="bookmarks-empty" class="card bg-white/90 border border-slate-200 rounded-xl p-5 text-slate-600 {% if items %}hidden{% endif %}">
+  {% if q %}
+  No bookmarks found for "{{ q }}".
+  {% else %}
+  No bookmarks found for this filter.
+  {% endif %}
+</div>
+
+<script>
+(() => {
+  const form = document.getElementById("bookmark-filter-form");
+  const queryInput = document.getElementById("bookmark-search-input");
+  const folderSelect = document.getElementById("bookmark-folder-select");
+  const tagSelect = document.getElementById("bookmark-tag-select");
+  const statusSelect = document.getElementById("bookmark-status-select");
+  const resultsEl = document.getElementById("bookmarks-results");
+  const emptyEl = document.getElementById("bookmarks-empty");
+  const selectAllButton = document.getElementById("bookmarks-select-all");
+  const bulkActionsEl = document.getElementById("bookmarks-bulk-actions");
+  const deleteSelectedButton = document.getElementById("bookmarks-delete-selected");
+  const deleteSelectedForm = document.getElementById("bookmarks-delete-selected-form");
+  const nextInputs = Array.from(document.querySelectorAll("[data-bookmarks-next-input]"));
+  const selectedInputContainers = Array.from(document.querySelectorAll("[data-bookmarks-selected-inputs]"));
+  const bulkActionButtons = Array.from(document.querySelectorAll("[data-bookmarks-bulk-button]"));
+  const selectionCountEl = document.getElementById("bookmarks-selection-count");
+
+  if (!form || !queryInput || !folderSelect || !tagSelect || !statusSelect || !resultsEl || !emptyEl || !selectAllButton || !bulkActionsEl || !deleteSelectedButton || !deleteSelectedForm || selectedInputContainers.length === 0 || nextInputs.length === 0 || bulkActionButtons.length === 0 || !selectionCountEl) {
+    return;
+  }
+
+  let debounceTimer = null;
+  let activeRequest = null;
+  const selectedIds = new Set();
+  const interactiveSelector = "a, button, input, label, select, textarea, form";
+
+  const escapeHtml = (value) => String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+
+  const updateUrl = (query, folderId, tag, status) => {
+    const url = new URL(window.location.href);
+    if (query) {
+      url.searchParams.set("q", query);
+    } else {
+      url.searchParams.delete("q");
+    }
+    if (folderId) {
+      url.searchParams.set("folder_id", folderId);
+    } else {
+      url.searchParams.delete("folder_id");
+    }
+    if (tag) {
+      url.searchParams.set("tag", tag);
+    } else {
+      url.searchParams.delete("tag");
+    }
+    if (status) {
+      url.searchParams.set("status", status);
+    } else {
+      url.searchParams.delete("status");
+    }
+    window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+    nextInputs.forEach((input) => {
+      input.value = currentPageUrl();
+    });
+  };
+
+  const currentPageUrl = () => `${window.location.pathname}${window.location.search}`;
+
+  const getVisibleCards = () => Array.from(resultsEl.querySelectorAll("[data-bookmark-card]"));
+
+  const applySelectionStyle = (card, selected) => {
+    card.style.backgroundColor = selected ? "rgba(148, 163, 184, 0.16)" : "";
+  };
+
+  const refreshSelectionUi = () => {
+    const count = selectedIds.size;
+    selectionCountEl.textContent = `${count} selected`;
+    bulkActionsEl.classList.toggle("hidden", count === 0);
+    bulkActionButtons.forEach((button) => {
+      button.disabled = count === 0;
+    });
+
+    selectedInputContainers.forEach((container) => {
+      container.innerHTML = "";
+    });
+    if (count === 0) {
+      return;
+    }
+
+    selectedIds.forEach((id) => {
+      selectedInputContainers.forEach((container) => {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "bookmark_ids";
+        input.value = id;
+        container.appendChild(input);
+      });
+    });
+  };
+
+  const syncSelectionWithVisibleCards = () => {
+    const cards = getVisibleCards();
+    const visibleIds = new Set(cards.map((card) => card.dataset.bookmarkId));
+
+    Array.from(selectedIds).forEach((id) => {
+      if (!visibleIds.has(id)) {
+        selectedIds.delete(id);
+      }
+    });
+
+    cards.forEach((card) => {
+      const id = card.dataset.bookmarkId;
+      const checkbox = card.querySelector("[data-bookmark-select]");
+      if (!checkbox) {
+        return;
+      }
+      checkbox.checked = selectedIds.has(id);
+      applySelectionStyle(card, checkbox.checked);
+    });
+
+    refreshSelectionUi();
+  };
+
+  const setSelectedState = (id, selected) => {
+    if (!id) {
+      return;
+    }
+    if (selected) {
+      selectedIds.add(String(id));
+    } else {
+      selectedIds.delete(String(id));
+    }
+    syncSelectionWithVisibleCards();
+  };
+
+  const renderItems = (items, query) => {
+    if (!Array.isArray(items) || items.length === 0) {
+      resultsEl.innerHTML = "";
+      emptyEl.textContent = query ? `No bookmarks found for "${query}".` : "No bookmarks found for this filter.";
+      emptyEl.classList.remove("hidden");
+      selectedIds.clear();
+      refreshSelectionUi();
+      return;
+    }
+
+    emptyEl.classList.add("hidden");
+    resultsEl.innerHTML = items.map((item) => {
+      const title = escapeHtml(item.title || "(untitled)");
+      const url = escapeHtml(item.url || "");
+      const folderPath = Array.isArray(item.folder_path) ? item.folder_path.filter((part) => String(part || "").trim().length > 0) : [];
+      const folderBreadcrumb = folderPath.length > 0 ? folderPath.map((part) => escapeHtml(part)).join(" / ") : "Root";
+      const folder = item.folder_name ? `<span class="px-2 py-1 rounded-full bg-slate-100">${escapeHtml(item.folder_name)}</span>` : "";
+      const tags = Array.isArray(item.tags)
+        ? item.tags.map((tag) => `<span class="px-2 py-1 rounded-full bg-emerald-100 text-emerald-800">#${escapeHtml(tag)}</span>`).join("")
+        : "";
+      const status = item.link_status ? `<span class="px-2 py-1 rounded-full bg-amber-100 text-amber-800">${escapeHtml(String(item.link_status).replaceAll("_", " "))}</span>` : "";
+      const score = Number(item.score || 0);
+      const reasons = Array.isArray(item.reasons) ? item.reasons.map((reason) => escapeHtml(reason)).join(", ") : "";
+      const scoreLine = query && score > 0 ? `<p class="mono text-xs text-slate-500 mt-2">Score ${escapeHtml(score)} - ${reasons}</p>` : "";
+      const id = String(item.id);
+      const checked = selectedIds.has(id) ? "checked" : "";
+      const nextUrl = encodeURIComponent(currentPageUrl());
+
+      return `
+        <article data-bookmark-card data-bookmark-id="${id}" class="card bg-white/90 border border-slate-200 rounded-xl p-4 transition-colors duration-150">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="min-w-0 flex-1 flex items-start gap-3">
+              <input type="checkbox" data-bookmark-select value="${id}" class="mt-1.5 h-4 w-4 rounded border-slate-300" ${checked}>
+              <div class="min-w-0">
+                <p class="mono text-[11px] uppercase tracking-wide text-slate-500 mb-1">${folderBreadcrumb}</p>
+                <h2 class="font-semibold text-lg">${title}</h2>
+                <a href="${url}" target="_blank" class="text-slate-600 hover:underline break-all">${url}</a>
+                <div class="mt-2 flex flex-wrap gap-2 text-xs">${folder}${tags}${status}</div>
+                ${scoreLine}
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <a href="/bookmarks/${item.id}/edit?next=${nextUrl}" class="px-3 py-1.5 rounded-lg bg-slate-100">Edit</a>
+              <form action="/bookmarks/${item.id}/delete" method="post">
+                <input type="hidden" name="next" value="${escapeHtml(currentPageUrl())}">
+                <button class="px-3 py-1.5 rounded-lg text-white" style="background: var(--ll-danger);">Delete</button>
+              </form>
+            </div>
+          </div>
+        </article>
+      `;
+    }).join("");
+
+    syncSelectionWithVisibleCards();
+  };
+
+  const runFilter = async () => {
+    const query = queryInput.value.trim();
+    const folderId = folderSelect.value;
+    const tag = tagSelect.value;
+    const status = statusSelect.value;
+
+    updateUrl(query, folderId, tag, status);
+
+    if (activeRequest) {
+      activeRequest.abort();
+    }
+    activeRequest = new AbortController();
+
+    try {
+      const params = new URLSearchParams();
+      if (query) {
+        params.set("q", query);
+      }
+      if (folderId) {
+        params.set("folder_id", folderId);
+      }
+      if (tag) {
+        params.set("tag", tag);
+      }
+      if (status) {
+        params.set("status", status);
+      }
+      const response = await fetch(`{{ url_for('web.bookmarks_live') }}?${params.toString()}`, {
+        headers: { "Accept": "application/json" },
+        signal: activeRequest.signal,
+      });
+      if (!response.ok) {
+        throw new Error("filter request failed");
+      }
+      const payload = await response.json();
+      renderItems(payload.items || [], query);
+    } catch (error) {
+      if (error.name === "AbortError") {
+        return;
+      }
+      renderItems([], query);
+    }
+  };
+
+  queryInput.addEventListener("input", () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(runFilter, 180);
+  });
+
+  folderSelect.addEventListener("change", runFilter);
+  tagSelect.addEventListener("change", runFilter);
+  statusSelect.addEventListener("change", runFilter);
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    runFilter();
+  });
+
+  resultsEl.addEventListener("change", (event) => {
+    const checkbox = event.target.closest("[data-bookmark-select]");
+    if (!checkbox) {
+      return;
+    }
+    setSelectedState(checkbox.value, checkbox.checked);
+  });
+
+  resultsEl.addEventListener("click", (event) => {
+    const card = event.target.closest("[data-bookmark-card]");
+    if (!card) {
+      return;
+    }
+    if (event.target.closest(interactiveSelector)) {
+      return;
+    }
+    const checkbox = card.querySelector("[data-bookmark-select]");
+    if (!checkbox) {
+      return;
+    }
+    setSelectedState(checkbox.value, !checkbox.checked);
+  });
+
+  selectAllButton.addEventListener("click", () => {
+    const cards = getVisibleCards();
+    cards.forEach((card) => {
+      const id = card.dataset.bookmarkId;
+      if (id) {
+        selectedIds.add(id);
+      }
+    });
+    syncSelectionWithVisibleCards();
+  });
+
+  deleteSelectedForm.addEventListener("submit", (event) => {
+    if (selectedIds.size === 0) {
+      event.preventDefault();
+      return;
+    }
+    if (!window.confirm(`Move ${selectedIds.size} selected bookmark(s) to the recycle bin?`)) {
+      event.preventDefault();
+      return;
+    }
+  });
+
+  syncSelectionWithVisibleCards();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,44 @@
+{
+  "manifest_version": 2,
+  "name": "LinkLoom",
+  "version": "0.1.0",
+  "description": "Sync Firefox bookmarks with your self-hosted LinkLoom server.",
+  "icons": {
+    "16": "icons/linkloom.svg",
+    "32": "icons/linkloom.svg",
+    "48": "icons/linkloom.svg",
+    "96": "icons/linkloom.svg",
+    "128": "icons/linkloom.svg"
+  },
+  "permissions": [
+    "bookmarks",
+    "storage",
+    "alarms",
+    "notifications",
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": [
+      "background.js"
+    ]
+  },
+  "browser_action": {
+    "default_icon": {
+      "16": "icons/linkloom.svg",
+      "32": "icons/linkloom.svg",
+      "64": "icons/linkloom.svg"
+    },
+    "default_title": "LinkLoom",
+    "default_popup": "popup.html"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "linkloom-sync@linkloom.local",
+      "strict_min_version": "109.0"
+    }
+  }
+}

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %} · Users{% endblock %}
+{% block content %}
+<div class="grid lg:grid-cols-[1.1fr_1fr] gap-6">
+  <section class="card bg-white/90 border border-slate-200 rounded-xl p-5">
+    <h1 class="text-2xl font-bold mb-2">Create User</h1>
+    <p class="text-slate-600 mb-4">Only admins can register new accounts.</p>
+    <form method="post" class="space-y-4">
+      <div>
+        <label class="block text-sm mb-1">Username</label>
+        <input name="username" required class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white">
+      </div>
+      <div>
+        <label class="block text-sm mb-1">Password</label>
+        <input type="password" name="password" required class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white">
+      </div>
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="is_admin" value="1" class="rounded border-slate-300">
+        Grant admin rights
+      </label>
+      <button class="text-white px-4 py-2.5 rounded-xl" style="background: var(--ll-accent);">Create User</button>
+    </form>
+  </section>
+
+  <section class="card bg-white/90 border border-slate-200 rounded-xl p-5">
+    <h2 class="text-2xl font-bold mb-4">Existing Users</h2>
+    <div class="space-y-3">
+      {% for user in users %}
+      <div class="border border-slate-200 rounded-lg p-3 flex items-center justify-between gap-3">
+        <div>
+          <p class="font-medium">{{ user.username }}</p>
+          <p class="text-xs mono text-slate-500">{{ user.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+        </div>
+        <div class="text-xs">
+          {% if user.is_admin %}<span class="px-2 py-1 rounded-full bg-sky-100 text-sky-800">admin</span>{% endif %}
+          {% if user.is_active %}<span class="px-2 py-1 rounded-full bg-emerald-100 text-emerald-800">active</span>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

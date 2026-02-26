@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LinkLoom Settings</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f8fb;
+        --card: #ffffff;
+        --text: #1e293b;
+        --muted: #4b5563;
+        --line: #d7dee9;
+        --primary: #165ba8;
+        --danger: #b93838;
+      }
+      body {
+        margin: 0;
+        font: 14px/1.45 "Segoe UI", "Ubuntu", sans-serif;
+        color: var(--text);
+        background: linear-gradient(160deg, #eef3fb 0%, var(--bg) 45%, #f7fafc 100%);
+      }
+      .wrap {
+        max-width: 880px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+      }
+      p.subtitle {
+        margin: 0 0 20px;
+        color: var(--muted);
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 18px;
+        margin-bottom: 16px;
+        box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 600;
+      }
+      input[type="text"],
+      input[type="password"],
+      input[type="number"] {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 9px 10px;
+        font: inherit;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .radio {
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        padding: 9px;
+        margin-bottom: 8px;
+      }
+      button {
+        border: 0;
+        border-radius: 8px;
+        padding: 9px 12px;
+        font: inherit;
+        cursor: pointer;
+        color: #fff;
+        background: var(--primary);
+      }
+      button.secondary {
+        color: var(--text);
+        background: #ecf1f8;
+      }
+      button.danger {
+        background: var(--danger);
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .pill {
+        display: inline-block;
+        border-radius: 999px;
+        padding: 2px 8px;
+        border: 1px solid var(--line);
+        margin-right: 6px;
+      }
+      #flash {
+        min-height: 20px;
+        margin-top: 6px;
+        color: var(--muted);
+      }
+      #preflightResult {
+        margin-top: 10px;
+        border: 1px dashed var(--line);
+        border-radius: 8px;
+        padding: 10px;
+        background: #fbfdff;
+      }
+      #confirmWrap {
+        margin-top: 10px;
+      }
+      @media (max-width: 760px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>LinkLoom Chrome Extension</h1>
+      <p class="subtitle">Connect this browser to your self-hosted LinkLoom and keep bookmarks synchronized.</p>
+
+      <section class="card">
+        <h2>Connection</h2>
+        <div class="grid">
+          <div>
+            <label for="appUrl">App URL</label>
+            <input id="appUrl" type="text" placeholder="https://bookmarks.example.com" />
+          </div>
+          <div>
+            <label for="token">API Token</label>
+            <input id="token" type="password" placeholder="ll_xxx" />
+          </div>
+        </div>
+        <div class="grid" style="margin-top: 10px;">
+          <div>
+            <label for="pollMinutes">Pull interval (minutes)</label>
+            <input id="pollMinutes" type="number" min="1" step="1" value="3" />
+          </div>
+          <div class="row" style="padding-top: 26px;">
+            <input id="syncEnabled" type="checkbox" />
+            <label for="syncEnabled" style="margin: 0;">Enable periodic sync</label>
+          </div>
+        </div>
+        <div class="row" style="margin-top: 14px;">
+          <button id="saveSettings">Save Settings</button>
+          <button id="syncNow" class="secondary">Sync Now</button>
+          <button id="resetState" class="danger">Reset Sync State</button>
+        </div>
+        <div id="flash"></div>
+      </section>
+
+      <section class="card">
+        <h2>Current Status</h2>
+        <div id="status" class="muted"></div>
+      </section>
+
+      <section class="card">
+        <h2>First Sync</h2>
+        <p class="muted">First sync requires confirmation. You will see local/server bookmark counts before apply.</p>
+        <div class="radio">
+          <label><input type="radio" name="mode" value="replace_server_with_local" checked /> Replace all server bookmarks with browser bookmarks</label>
+        </div>
+        <div class="radio">
+          <label><input type="radio" name="mode" value="replace_local_with_server" /> Replace all browser bookmarks with server bookmarks</label>
+        </div>
+        <div class="radio">
+          <label><input type="radio" name="mode" value="two_way_merge" /> Two-way merge (add missing in both directions)</label>
+        </div>
+
+        <div class="row" style="margin-top: 10px;">
+          <button id="preflight">Run Preflight</button>
+        </div>
+
+        <div id="preflightResult" hidden>
+          <div id="preflightText" class="muted"></div>
+          <div id="confirmWrap" hidden>
+            <p><strong>Required phrase:</strong> <span id="requiredPhrase"></span></p>
+            <label for="typedPhrase">Type the phrase above</label>
+            <input id="typedPhrase" type="text" />
+            <div class="row" style="margin-top: 8px;">
+              <input id="confirmChecked" type="checkbox" />
+              <label for="confirmChecked" style="margin: 0;">I understand this first-sync operation.</label>
+            </div>
+            <div class="row" style="margin-top: 10px;">
+              <button id="applyFirstSync">Apply First Sync</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script src="options.js"></script>
+  </body>
+</html>

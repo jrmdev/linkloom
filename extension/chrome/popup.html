@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LinkLoom</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f4f7fb;
+        --card: #ffffff;
+        --line: #d7dee9;
+        --text: #1e293b;
+        --muted: #566174;
+        --primary: #165ba8;
+      }
+
+      body {
+        margin: 0;
+        min-width: 360px;
+        max-width: 420px;
+        font: 13px/1.4 "Segoe UI", "Ubuntu", sans-serif;
+        color: var(--text);
+        background: var(--bg);
+      }
+
+      .wrap {
+        padding: 12px;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px;
+      }
+
+      .toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 16px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 7px;
+        padding: 6px 10px;
+        background: var(--primary);
+        color: #fff;
+        cursor: pointer;
+      }
+
+      input[type="search"] {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 8px 9px;
+        font: inherit;
+      }
+
+      #status {
+        margin-top: 8px;
+        color: var(--muted);
+        min-height: 18px;
+      }
+
+      #results {
+        list-style: none;
+        margin: 10px 0 0;
+        padding: 0;
+        max-height: 320px;
+        overflow: auto;
+      }
+
+      #results li + li {
+        border-top: 1px solid #edf1f7;
+      }
+
+      #results a {
+        display: block;
+        padding: 8px 0;
+        text-decoration: none;
+        color: inherit;
+      }
+
+      .title {
+        font-weight: 600;
+        margin-bottom: 2px;
+        word-break: break-word;
+      }
+
+      .url {
+        color: var(--muted);
+        font-size: 12px;
+        word-break: break-all;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <div class="toolbar">
+          <h1>LinkLoom</h1>
+          <button id="openOptions" type="button">Open Options</button>
+        </div>
+        <input
+          id="searchInput"
+          type="search"
+          placeholder="Search titles, tags, notes..."
+          autocomplete="off"
+        />
+        <div id="status">Loading extension state...</div>
+        <ul id="results"></ul>
+      </div>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>

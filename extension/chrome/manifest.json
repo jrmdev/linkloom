@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "LinkLoom",
+  "version": "0.1.0",
+  "description": "Sync Chrome bookmarks with your self-hosted LinkLoom server.",
+  "icons": {
+    "16": "icons/linkloom.svg",
+    "32": "icons/linkloom.svg",
+    "48": "icons/linkloom.svg",
+    "96": "icons/linkloom.svg",
+    "128": "icons/linkloom.svg"
+  },
+  "permissions": [
+    "bookmarks",
+    "storage",
+    "alarms",
+    "notifications"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_icon": {
+      "16": "icons/linkloom.svg",
+      "32": "icons/linkloom.svg",
+      "64": "icons/linkloom.svg"
+    },
+    "default_title": "LinkLoom",
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html"
+}

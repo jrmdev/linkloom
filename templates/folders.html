@@ -1,0 +1,392 @@
+{% extends "base.html" %}
+{% block title %} · Folders{% endblock %}
+{% block content %}
+{% macro render_folder_node(folder) %}
+  <li class="space-y-3">
+    <section class="card bg-white/90 border border-slate-200 rounded-xl p-4" data-folder-card data-drop-target data-drop-folder-id="{{ folder.id }}" data-folder-id="{{ folder.id }}" data-folder-name="{{ folder.name }}" data-bookmark-count="{{ folder_subtree_bookmark_counts.get(folder.id, 0) }}">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="min-w-0 flex items-center gap-2">
+          <button type="button" draggable="true" data-folder-drag-handle class="mono text-xs px-2 py-1 rounded border border-slate-300 bg-slate-50 text-slate-600 cursor-grab" title="Drag folder">::</button>
+          <h3 class="font-semibold text-slate-900 break-words">{{ folder.name }}</h3>
+          <span class="mono text-[11px] text-slate-500">{{ folder_subtree_bookmark_counts.get(folder.id, 0) }} bookmarks</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" data-folder-rename class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700">Rename</button>
+          <button type="button" data-folder-delete class="px-3 py-1.5 rounded-lg text-white" style="background: var(--ll-danger);">Delete</button>
+        </div>
+      </div>
+
+      <ul class="mt-3 space-y-2 min-h-[32px]" data-bookmark-drop-target data-drop-target data-drop-folder-id="{{ folder.id }}">
+        {% for bookmark in bookmarks_by_folder.get(folder.id, []) %}
+          <li class="rounded-lg border border-slate-200 bg-white px-3 py-2 flex items-center gap-2" data-bookmark-row data-bookmark-id="{{ bookmark.id }}" draggable="true">
+            <input type="checkbox" data-bookmark-select value="{{ bookmark.id }}" class="h-4 w-4 rounded border-slate-300">
+            <span class="text-sm text-slate-700 truncate">{{ bookmark.display_title }}</span>
+          </li>
+        {% else %}
+          <li class="text-xs text-slate-500 italic px-1">Drop bookmarks here.</li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    {% if children_by_parent.get(folder.id) %}
+      <ul class="ml-5 pl-4 border-l border-slate-200 space-y-3">
+        {% for child in children_by_parent.get(folder.id, []) %}
+          {{ render_folder_node(child) }}
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </li>
+{% endmacro %}
+
+<div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+  <div>
+    <h1 class="text-3xl font-bold">Folders</h1>
+    <p class="text-slate-600">Organize folders and move bookmarks with drag and drop.</p>
+  </div>
+  <p class="mono text-xs text-slate-500">Drag folders into folders. Drag selected bookmarks into any target folder.</p>
+</div>
+
+<section class="card bg-white/90 border border-slate-200 rounded-xl p-5 mb-6">
+  <h2 class="text-xl font-semibold mb-3">Create Folder</h2>
+  <form id="folder-create-form" class="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,220px)_auto]">
+    <input name="name" type="text" required maxlength="255" placeholder="Folder name" class="border border-slate-300 rounded-lg px-3 py-2 bg-white">
+    <select name="parent_id" class="border border-slate-300 rounded-lg px-3 py-2 bg-white">
+      <option value="">Root</option>
+      {% for folder in folder_options %}
+        <option value="{{ folder.id }}">{{ folder.label }}</option>
+      {% endfor %}
+    </select>
+    <button class="px-4 py-2.5 rounded-lg text-white" style="background: var(--ll-accent);">Create</button>
+  </form>
+  <p id="folders-flash" class="text-sm text-slate-600 mt-3 min-h-[20px]"></p>
+</section>
+
+<div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+  <section class="space-y-3" id="folders-tree">
+    <div class="card bg-white/90 border border-slate-200 rounded-xl p-4" data-drop-target data-drop-folder-id="">
+      <h2 class="text-lg font-semibold">Root Folder Drop Zone</h2>
+      <p class="text-sm text-slate-600 mt-1">Drop folders here to move them to the root level.</p>
+    </div>
+
+    {% if children_by_parent.get(None) %}
+      <ul class="space-y-3">
+        {% for folder in children_by_parent.get(None, []) %}
+          {{ render_folder_node(folder) }}
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="card bg-white/90 border border-slate-200 rounded-xl p-5 text-slate-600">No folders yet.</div>
+    {% endif %}
+  </section>
+
+  <section class="space-y-3">
+    <div class="card bg-white/90 border border-slate-200 rounded-xl p-4">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 class="text-lg font-semibold">Selected Bookmarks</h2>
+        <div class="flex items-center gap-2">
+          <span id="folders-selected-count" class="mono text-xs text-slate-500">0 selected</span>
+          <button type="button" id="folders-clear-selection" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700">Clear</button>
+        </div>
+      </div>
+      <p class="text-sm text-slate-600 mt-2">Use checkboxes, then drag any selected bookmark into another folder.</p>
+    </div>
+
+    <div class="card bg-white/90 border border-slate-200 rounded-xl p-4" data-drop-target data-drop-folder-id="">
+      <h2 class="text-lg font-semibold">Unfiled Bookmarks</h2>
+      <p class="text-sm text-slate-600 mt-1 mb-3">Drop bookmarks here to remove them from a folder.</p>
+      <ul class="space-y-2 min-h-[32px]" data-bookmark-drop-target data-drop-target data-drop-folder-id="">
+        {% for bookmark in bookmarks_by_folder.get(None, []) %}
+          <li class="rounded-lg border border-slate-200 bg-white px-3 py-2 flex items-center gap-2" data-bookmark-row data-bookmark-id="{{ bookmark.id }}" draggable="true">
+            <input type="checkbox" data-bookmark-select value="{{ bookmark.id }}" class="h-4 w-4 rounded border-slate-300">
+            <span class="text-sm text-slate-700 truncate">{{ bookmark.display_title }}</span>
+          </li>
+        {% else %}
+          <li class="text-xs text-slate-500 italic px-1">No unfiled bookmarks.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const createForm = document.getElementById("folder-create-form");
+  const flashEl = document.getElementById("folders-flash");
+  const selectedCountEl = document.getElementById("folders-selected-count");
+  const clearSelectionButton = document.getElementById("folders-clear-selection");
+  const folderTreeEl = document.getElementById("folders-tree");
+
+  if (!createForm || !flashEl || !selectedCountEl || !clearSelectionButton || !folderTreeEl) {
+    return;
+  }
+
+  const selectedBookmarkIds = new Set();
+  const interactiveSelector = "a, button, input, label, select, textarea, form";
+  let dragState = null;
+  let busy = false;
+
+  const setFlash = (message, kind = "info") => {
+    flashEl.textContent = message || "";
+    flashEl.classList.remove("text-slate-600", "text-red-700", "text-emerald-700");
+    if (kind === "error") {
+      flashEl.classList.add("text-red-700");
+      return;
+    }
+    if (kind === "success") {
+      flashEl.classList.add("text-emerald-700");
+      return;
+    }
+    flashEl.classList.add("text-slate-600");
+  };
+
+  const postForm = async (url, fields) => {
+    const body = new URLSearchParams();
+    Object.entries(fields || {}).forEach(([key, value]) => {
+      if (Array.isArray(value)) {
+        value.forEach((entry) => {
+          body.append(key, String(entry));
+        });
+        return;
+      }
+      if (value === undefined || value === null) {
+        return;
+      }
+      body.append(key, String(value));
+    });
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "X-Requested-With": "XMLHttpRequest",
+        "Accept": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+      },
+      body,
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || "Request failed.");
+    }
+    return payload;
+  };
+
+  const runAction = async (fn) => {
+    if (busy) {
+      return;
+    }
+    busy = true;
+    try {
+      await fn();
+      window.location.reload();
+    } catch (error) {
+      setFlash(error.message || "Action failed.", "error");
+    } finally {
+      busy = false;
+    }
+  };
+
+  const bookmarkRows = () => Array.from(document.querySelectorAll("[data-bookmark-row]"));
+
+  const refreshSelectionUi = () => {
+    selectedCountEl.textContent = `${selectedBookmarkIds.size} selected`;
+    bookmarkRows().forEach((row) => {
+      const id = row.dataset.bookmarkId;
+      const checkbox = row.querySelector("[data-bookmark-select]");
+      if (!id || !checkbox) {
+        return;
+      }
+      checkbox.checked = selectedBookmarkIds.has(id);
+      row.style.backgroundColor = checkbox.checked ? "rgba(148, 163, 184, 0.16)" : "";
+    });
+  };
+
+  const setSelectedBookmark = (id, selected) => {
+    if (!id) {
+      return;
+    }
+    if (selected) {
+      selectedBookmarkIds.add(String(id));
+    } else {
+      selectedBookmarkIds.delete(String(id));
+    }
+    refreshSelectionUi();
+  };
+
+  createForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const formData = new FormData(createForm);
+    const name = String(formData.get("name") || "").trim();
+    if (!name) {
+      setFlash("Folder name is required.", "error");
+      return;
+    }
+    await runAction(async () => {
+      await postForm("{{ url_for('web.folders_create_web') }}", {
+        name,
+        parent_id: String(formData.get("parent_id") || "").trim(),
+      });
+    });
+  });
+
+  document.addEventListener("change", (event) => {
+    const checkbox = event.target.closest("[data-bookmark-select]");
+    if (!checkbox) {
+      return;
+    }
+    setSelectedBookmark(checkbox.value, checkbox.checked);
+  });
+
+  document.addEventListener("click", (event) => {
+    const renameButton = event.target.closest("[data-folder-rename]");
+    if (renameButton) {
+      const card = renameButton.closest("[data-folder-card]");
+      if (!card) {
+        return;
+      }
+      const folderId = card.dataset.folderId;
+      const currentName = card.dataset.folderName || "";
+      const nextName = window.prompt("Rename folder", currentName);
+      if (!nextName || !nextName.trim() || nextName.trim() === currentName) {
+        return;
+      }
+      void runAction(async () => {
+        await postForm(`/folders/${folderId}/rename`, { name: nextName.trim() });
+      });
+      return;
+    }
+
+    const deleteButton = event.target.closest("[data-folder-delete]");
+    if (deleteButton) {
+      const card = deleteButton.closest("[data-folder-card]");
+      if (!card) {
+        return;
+      }
+      const folderId = card.dataset.folderId;
+      const folderName = card.dataset.folderName || "folder";
+      const bookmarkCount = Number(card.dataset.bookmarkCount || "0");
+      let message = `Delete folder "${folderName}"?`;
+      if (bookmarkCount > 0) {
+        message += ` This will delete ${bookmarkCount} bookmark(s) in this folder.`;
+      }
+      if (!window.confirm(message)) {
+        return;
+      }
+      void runAction(async () => {
+        await postForm(`/folders/${folderId}/delete`, { confirm_delete: "1" });
+      });
+      return;
+    }
+
+    const row = event.target.closest("[data-bookmark-row]");
+    if (!row) {
+      return;
+    }
+    if (event.target.closest(interactiveSelector)) {
+      return;
+    }
+    const id = row.dataset.bookmarkId;
+    setSelectedBookmark(id, !selectedBookmarkIds.has(String(id)));
+  });
+
+  clearSelectionButton.addEventListener("click", () => {
+    selectedBookmarkIds.clear();
+    refreshSelectionUi();
+  });
+
+  document.addEventListener("dragstart", (event) => {
+    const folderHandle = event.target.closest("[data-folder-drag-handle]");
+    if (folderHandle) {
+      const folderCard = folderHandle.closest("[data-folder-card]");
+      if (!folderCard || !event.dataTransfer) {
+        return;
+      }
+      dragState = {
+        kind: "folder",
+        folderId: String(folderCard.dataset.folderId || ""),
+      };
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", `folder:${dragState.folderId}`);
+      return;
+    }
+
+    const bookmarkRow = event.target.closest("[data-bookmark-row]");
+    if (!bookmarkRow || !event.dataTransfer) {
+      return;
+    }
+    const id = String(bookmarkRow.dataset.bookmarkId || "");
+    if (!id) {
+      return;
+    }
+
+    const ids = selectedBookmarkIds.has(id) && selectedBookmarkIds.size > 0
+      ? Array.from(selectedBookmarkIds)
+      : [id];
+
+    dragState = {
+      kind: "bookmarks",
+      bookmarkIds: ids,
+    };
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", `bookmarks:${ids.join(",")}`);
+  });
+
+  document.addEventListener("dragend", () => {
+    dragState = null;
+    document.querySelectorAll("[data-drop-target]").forEach((node) => {
+      node.classList.remove("ring-2", "ring-sky-300");
+    });
+  });
+
+  document.querySelectorAll("[data-drop-target]").forEach((target) => {
+    target.addEventListener("dragover", (event) => {
+      if (!dragState) {
+        return;
+      }
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      target.classList.add("ring-2", "ring-sky-300");
+    });
+
+    target.addEventListener("dragleave", () => {
+      target.classList.remove("ring-2", "ring-sky-300");
+    });
+
+    target.addEventListener("drop", async (event) => {
+      if (!dragState) {
+        return;
+      }
+      event.preventDefault();
+      target.classList.remove("ring-2", "ring-sky-300");
+
+      const destinationFolderId = String(target.dataset.dropFolderId || "").trim();
+      if (dragState.kind === "folder") {
+        const folderId = dragState.folderId;
+        if (!folderId || folderId === destinationFolderId) {
+          return;
+        }
+        await runAction(async () => {
+          await postForm(`/folders/${folderId}/move`, { parent_id: destinationFolderId });
+        });
+        return;
+      }
+
+      if (dragState.kind === "bookmarks") {
+        const ids = Array.isArray(dragState.bookmarkIds) ? dragState.bookmarkIds : [];
+        if (ids.length === 0) {
+          return;
+        }
+        await runAction(async () => {
+          await postForm("{{ url_for('web.folders_move_bookmarks_web') }}", {
+            folder_id: destinationFolderId,
+            bookmark_ids: ids,
+          });
+        });
+      }
+    });
+  });
+
+  refreshSelectionUi();
+})();
+</script>
+{% endblock %}

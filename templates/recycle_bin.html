@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %} · Recycle Bin{% endblock %}
+{% block content %}
+<div class="max-w-5xl">
+  <div class="flex flex-wrap items-end justify-between gap-3 mb-2">
+    <h1 class="text-3xl font-bold">Recycle Bin</h1>
+    {% if items %}
+    <form method="post" action="{{ url_for('web.recycle_empty') }}" onsubmit="return confirm('Permanently delete all trashed bookmarks? This cannot be undone.');">
+      <button class="px-4 py-2.5 rounded-xl text-white" style="background: var(--ll-danger);">Empty Bin</button>
+    </form>
+    {% endif %}
+  </div>
+  <p class="text-slate-600 mb-6">Deleted bookmarks stay here until you restore or permanently purge them.</p>
+
+  <div class="space-y-3">
+    {% for item in items %}
+    <article class="card bg-white/90 border border-slate-200 rounded-xl p-4">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 class="font-semibold text-lg">{{ item.title or "(untitled)" }}</h2>
+          <a href="{{ item.url }}" target="_blank" class="text-slate-600 hover:underline break-all">{{ item.url }}</a>
+          <p class="text-xs mono text-slate-500 mt-1">Deleted at {{ item.deleted_at.strftime('%Y-%m-%d %H:%M') if item.deleted_at else '' }}</p>
+        </div>
+        <div class="flex gap-2">
+          <form method="post" action="{{ url_for('web.recycle_restore', bookmark_id=item.id) }}">
+            <button class="px-3 py-1.5 rounded-lg text-white" style="background: var(--ll-accent);">Restore</button>
+          </form>
+          <form method="post" action="{{ url_for('web.recycle_purge', bookmark_id=item.id) }}">
+            <button class="px-3 py-1.5 rounded-lg text-white" style="background: var(--ll-danger);">Purge</button>
+          </form>
+        </div>
+      </div>
+    </article>
+    {% else %}
+    <div class="card bg-white/90 border border-slate-200 rounded-xl p-5 text-slate-600">Recycle bin is empty.</div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

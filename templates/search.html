@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %} · Search{% endblock %}
+{% block content %}
+<div class="max-w-5xl">
+  <h1 class="text-3xl font-bold mb-2">Search</h1>
+  <p class="text-slate-600 mb-3">Title and tags are ranked first, then fuzzy content matches.</p>
+  <p class="text-sm text-slate-500 mb-5">Results update as you type.</p>
+
+  <form id="search-form" method="get" class="card bg-white/90 border border-slate-200 rounded-xl p-4 mb-5 flex gap-3">
+    <input id="search-query" type="text" name="q" value="{{ q }}" placeholder="Search bookmarks, tags, notes, content..." class="flex-1 border border-slate-300 rounded-lg px-3 py-2 bg-white" autocomplete="off">
+    <noscript>
+      <button class="px-4 py-2.5 rounded-lg text-white" style="background: var(--ll-accent);">Search</button>
+    </noscript>
+  </form>
+
+  <div id="search-results" class="space-y-3">
+    {% for row in results %}
+      <article class="card bg-white/90 border border-slate-200 rounded-xl p-4">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 class="font-semibold text-lg">{{ row.bookmark.title or "(untitled)" }}</h2>
+            <a href="{{ row.bookmark.url }}" target="_blank" class="text-slate-600 hover:underline break-all">{{ row.bookmark.url }}</a>
+          </div>
+          <div class="text-right text-xs">
+            <div class="mono">Score: {{ row.score }}</div>
+            <div class="text-slate-500">{{ row.reasons | join(', ') }}</div>
+          </div>
+        </div>
+      </article>
+    {% endfor %}
+  </div>
+  <div id="search-empty" class="card bg-white/90 border border-slate-200 rounded-xl p-5 text-slate-600 {% if not q or results %}hidden{% endif %}">
+    No results for "{{ q }}".
+  </div>
+</div>
+
+<script>
+(() => {
+  const form = document.getElementById("search-form");
+  const input = document.getElementById("search-query");
+  const resultsEl = document.getElementById("search-results");
+  const emptyEl = document.getElementById("search-empty");
+
+  if (!form || !input || !resultsEl || !emptyEl) {
+    return;
+  }
+
+  let debounceTimer = null;
+  let activeRequest = null;
+
+  const escapeHtml = (value) => String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+
+  const updateUrl = (query) => {
+    const url = new URL(window.location.href);
+    if (query) {
+      url.searchParams.set("q", query);
+    } else {
+      url.searchParams.delete("q");
+    }
+    const target = `${url.pathname}${url.search}`;
+    window.history.replaceState({}, "", target);
+  };
+
+  const renderItems = (items, query) => {
+    if (!Array.isArray(items) || items.length === 0) {
+      resultsEl.innerHTML = "";
+      if (query) {
+        emptyEl.textContent = `No results for "${query}".`;
+        emptyEl.classList.remove("hidden");
+      } else {
+        emptyEl.classList.add("hidden");
+      }
+      return;
+    }
+
+    emptyEl.classList.add("hidden");
+    resultsEl.innerHTML = items
+      .map((item) => {
+        const title = escapeHtml(item.title || "(untitled)");
+        const url = escapeHtml(item.url || "");
+        const score = escapeHtml(item.score || 0);
+        const reasons = escapeHtml((item.reasons || []).join(", "));
+        return `
+          <article class="card bg-white/90 border border-slate-200 rounded-xl p-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 class="font-semibold text-lg">${title}</h2>
+                <a href="${url}" target="_blank" class="text-slate-600 hover:underline break-all">${url}</a>
+              </div>
+              <div class="text-right text-xs">
+                <div class="mono">Score: ${score}</div>
+                <div class="text-slate-500">${reasons}</div>
+              </div>
+            </div>
+          </article>
+        `;
+      })
+      .join("");
+  };
+
+  const runSearch = async () => {
+    const query = input.value.trim();
+    updateUrl(query);
+
+    if (!query) {
+      renderItems([], "");
+      return;
+    }
+
+    if (activeRequest) {
+      activeRequest.abort();
+    }
+    activeRequest = new AbortController();
+
+    try {
+      const response = await fetch(`{{ url_for('web.search_live') }}?q=${encodeURIComponent(query)}`, {
+        headers: { "Accept": "application/json" },
+        signal: activeRequest.signal,
+      });
+      if (!response.ok) {
+        throw new Error("search request failed");
+      }
+      const payload = await response.json();
+      renderItems(payload.items || [], query);
+    } catch (error) {
+      if (error.name === "AbortError") {
+        return;
+      }
+      renderItems([], query);
+    }
+  };
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    runSearch();
+  });
+
+  input.addEventListener("input", () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(runSearch, 220);
+  });
+})();
+</script>
+{% endblock %}

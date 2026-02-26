@@ -1,0 +1,497 @@
+{% extends "base.html" %}
+{% block title %} · Dead Links{% endblock %}
+{% block content %}
+<div class="max-w-5xl">
+  {% set current_page_url = request.full_path if request.query_string else request.path %}
+  <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-3xl font-bold">Dead Link Management</h1>
+      <p class="text-slate-600">Re-check unstable links in the background. The status panel tracks progress, ETA, and per-link updates.</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <form id="dead-link-form" method="post">
+        <button id="dead-link-submit" class="px-4 py-2.5 rounded-xl text-white" style="background: var(--ll-accent-2);">Run Bulk Check</button>
+      </form>
+      <form action="{{ url_for('web.dead_links_delete_all') }}" method="post">
+        <input type="hidden" name="next" value="{{ current_page_url }}">
+        <button class="px-4 py-2.5 rounded-xl text-white" style="background: var(--ll-danger);">Delete All Dead Links</button>
+      </form>
+    </div>
+  </div>
+
+  <section class="card bg-white/90 border border-slate-200 rounded-xl p-5 mb-6">
+    <h2 class="text-xl font-semibold mb-3">Recent Scan Jobs</h2>
+    <div class="space-y-3">
+      {% for job in jobs %}
+      <div class="border border-slate-200 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div class="mono text-xs text-slate-500">JOB #{{ job.id }}</div>
+          <div class="font-medium">Status: {{ job.status.replace('_', ' ') }}</div>
+          <div class="text-sm text-slate-600">Created: {{ job.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+        </div>
+        <div class="text-sm">
+          <div>Progress: <span class="mono">{{ job.progress }}%</span></div>
+          <div>Checked: <span class="mono">{{ job.total_checked }}</span> / <span class="mono">{{ job.total_targets }}</span></div>
+          <div>Problematic: <span class="mono">{{ job.total_problematic }}</span></div>
+        </div>
+        <div class="flex items-center gap-2">
+          {% if job.status in ['pending', 'running'] %}
+          <form action="{{ url_for('web.dead_link_job_stop_web', job_id=job.id) }}" method="post">
+            <button class="px-3 py-1.5 rounded-lg text-white" style="background: var(--ll-accent-2);">Stop</button>
+          </form>
+          {% else %}
+          <form action="{{ url_for('web.dead_link_job_delete_web', job_id=job.id) }}" method="post">
+            <button class="px-3 py-1.5 rounded-lg text-white" style="background: var(--ll-danger);">Delete Job</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+      {% else %}
+      <p class="text-slate-600">No scan jobs yet.</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <p id="dead-links-selection-count" class="text-sm text-slate-600">0 selected</p>
+    <div class="flex items-center gap-2">
+      <button id="dead-links-select-all" type="button" class="rounded-lg px-3 py-2 bg-slate-100">Select All Displayed</button>
+      <form id="dead-links-recheck-selected-form" action="{{ url_for('web.dead_links_recheck_selected') }}" method="post" class="inline-flex items-center">
+        <input type="hidden" name="next" value="{{ current_page_url }}">
+        <div id="dead-links-recheck-selected-inputs"></div>
+        <button id="dead-links-recheck-selected" class="rounded-lg px-3 py-2 text-white disabled:opacity-60 disabled:cursor-not-allowed" style="background: var(--ll-accent-2);" disabled>Re-check Selected</button>
+      </form>
+      <form id="dead-links-delete-selected-form" action="{{ url_for('web.dead_links_delete_selected') }}" method="post" class="inline-flex items-center">
+        <input type="hidden" name="next" value="{{ current_page_url }}">
+        <div id="dead-links-selected-inputs"></div>
+        <button id="dead-links-delete-selected" class="rounded-lg px-3 py-2 text-white disabled:opacity-60 disabled:cursor-not-allowed" style="background: var(--ll-danger);" disabled>Delete Selected</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="dead-links-results" class="space-y-3">
+    {% for item in items %}
+    <article data-dead-link-card data-bookmark-id="{{ item.id }}" class="card bg-white/90 border border-slate-200 rounded-xl p-4">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0 flex-1 flex items-start gap-3">
+          <input type="checkbox" data-dead-link-select value="{{ item.id }}" class="mt-1.5 h-4 w-4 rounded border-slate-300">
+          <div class="min-w-0">
+            {% set folder_parts = dead_link_folder_paths.get(item.id) if dead_link_folder_paths else [] %}
+            <p class="mono text-[11px] uppercase tracking-wide text-slate-500 mb-1">{{ folder_parts | join(' / ') if folder_parts else 'Root' }}</p>
+            <h2 class="font-semibold text-lg">{{ item.title or "(untitled)" }}</h2>
+            <a href="{{ item.url }}" target="_blank" class="text-slate-600 hover:underline break-all">{{ item.url }}</a>
+            <p class="text-xs mono text-slate-500 mt-1">Status: {{ item.link_status.replace('_', ' ') if item.link_status else 'unknown' }} · Checked: {{ item.last_checked_at.strftime('%Y-%m-%d %H:%M') if item.last_checked_at else 'never' }}</p>
+          </div>
+        </div>
+        <div class="flex shrink-0 items-center gap-2">
+          <a href="{{ url_for('web.bookmarks_edit', bookmark_id=item.id, next=current_page_url) }}" class="px-3 py-1.5 rounded-lg bg-slate-100">Review</a>
+          <form action="{{ url_for('web.dead_links_delete_one', bookmark_id=item.id) }}" method="post">
+            <input type="hidden" name="next" value="{{ current_page_url }}">
+            <button class="px-3 py-1.5 rounded-lg text-white" style="background: var(--ll-danger);">Delete</button>
+          </form>
+        </div>
+      </div>
+    </article>
+    {% else %}
+    <div class="card bg-white/90 border border-slate-200 rounded-xl p-5 text-slate-600">No dead links detected yet.</div>
+    {% endfor %}
+  </div>
+</div>
+
+<aside id="dead-link-status-dialog" class="hidden fixed bottom-4 right-4 z-50 w-[min(92vw,420px)] card bg-white/95 border border-slate-200 rounded-2xl shadow-2xl p-4 space-y-3">
+  <div class="flex items-start justify-between gap-3">
+    <div>
+      <p class="mono text-[11px] tracking-wide text-slate-500">DEAD-LINK SCAN</p>
+      <h3 id="dead-link-title" class="text-lg font-semibold">Preparing scan...</h3>
+    </div>
+    <div class="flex items-center gap-2">
+      <button id="dead-link-stop" type="button" class="hidden px-2.5 py-1.5 rounded-lg text-xs text-white" style="background: var(--ll-accent-2);">Stop</button>
+      <button id="dead-link-close" type="button" class="text-sm text-slate-500 hover:text-slate-800">Hide</button>
+    </div>
+  </div>
+
+  <div class="h-2 w-full rounded-full bg-slate-200 overflow-hidden">
+    <div id="dead-link-bar" class="h-full rounded-full transition-all duration-300" style="width: 0%; background: linear-gradient(90deg, var(--ll-accent) 0%, var(--ll-accent-2) 100%);"></div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-2 text-sm">
+    <div class="rounded-lg bg-slate-50 border border-slate-200 p-2">
+      <div class="text-slate-500 text-xs">Processed</div>
+      <div id="dead-link-count" class="mono text-base">0 / 0</div>
+    </div>
+    <div class="rounded-lg bg-slate-50 border border-slate-200 p-2">
+      <div class="text-slate-500 text-xs">ETA</div>
+      <div id="dead-link-eta" class="mono text-base">--:--</div>
+    </div>
+    <div class="rounded-lg bg-slate-50 border border-slate-200 p-2">
+      <div class="text-slate-500 text-xs">Alive</div>
+      <div id="dead-link-alive" class="mono text-base">0</div>
+    </div>
+    <div class="rounded-lg bg-slate-50 border border-slate-200 p-2">
+      <div class="text-slate-500 text-xs">Problematic/Errors</div>
+      <div id="dead-link-problematic" class="mono text-base">0 / 0</div>
+    </div>
+  </div>
+
+  <div class="rounded-lg border border-slate-200 bg-white px-3 py-2">
+    <div class="text-xs text-slate-500">Current bookmark</div>
+    <div id="dead-link-current" class="text-sm break-words">Waiting for processing...</div>
+  </div>
+
+  <p id="dead-link-meta" class="text-xs text-slate-500">Waiting for scan job...</p>
+</aside>
+
+<script>
+(() => {
+  const form = document.getElementById("dead-link-form");
+  const submitButton = document.getElementById("dead-link-submit");
+  const recheckSelectedForm = document.getElementById("dead-links-recheck-selected-form");
+  const recheckSelectedButton = document.getElementById("dead-links-recheck-selected");
+  const dialog = document.getElementById("dead-link-status-dialog");
+  const stopButton = document.getElementById("dead-link-stop");
+  const closeButton = document.getElementById("dead-link-close");
+  const titleEl = document.getElementById("dead-link-title");
+  const barEl = document.getElementById("dead-link-bar");
+  const countEl = document.getElementById("dead-link-count");
+  const etaEl = document.getElementById("dead-link-eta");
+  const aliveEl = document.getElementById("dead-link-alive");
+  const problematicEl = document.getElementById("dead-link-problematic");
+  const currentEl = document.getElementById("dead-link-current");
+  const metaEl = document.getElementById("dead-link-meta");
+
+  if (!form) {
+    return;
+  }
+
+  let pollingTimer = null;
+  let activeJobId = {{ active_job.id if active_job else 'null' }};
+  let hiddenManually = false;
+  let completionHandledFor = null;
+
+  const formatDuration = (seconds) => {
+    if (!Number.isFinite(seconds) || seconds < 0) {
+      return "--:--";
+    }
+    const safe = Math.max(0, Math.round(seconds));
+    const mins = Math.floor(safe / 60);
+    const secs = safe % 60;
+    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  };
+
+  const showDialog = () => {
+    if (!hiddenManually) {
+      dialog.classList.remove("hidden");
+    }
+  };
+
+  const setRunningState = (running) => {
+    submitButton.disabled = running;
+    submitButton.classList.toggle("opacity-60", running);
+    submitButton.classList.toggle("cursor-not-allowed", running);
+    submitButton.textContent = running ? "Scan Running..." : "Run Bulk Check";
+
+    if (recheckSelectedButton) {
+      const selectedCount = Number(recheckSelectedButton.dataset.selectionCount || "0");
+      recheckSelectedButton.disabled = running || selectedCount === 0;
+      recheckSelectedButton.classList.toggle("opacity-60", recheckSelectedButton.disabled);
+      recheckSelectedButton.classList.toggle("cursor-not-allowed", recheckSelectedButton.disabled);
+      recheckSelectedButton.textContent = running ? "Scan Running..." : "Re-check Selected";
+    }
+  };
+
+  const setStopState = (job) => {
+    if (!stopButton) {
+      return;
+    }
+    const canStop = job && (job.status === "pending" || job.status === "running");
+    stopButton.classList.toggle("hidden", !canStop);
+    stopButton.disabled = !canStop;
+    stopButton.classList.toggle("opacity-60", !canStop);
+  };
+
+  const stopPolling = () => {
+    if (pollingTimer) {
+      clearInterval(pollingTimer);
+      pollingTimer = null;
+    }
+  };
+
+  const renderStatus = (job) => {
+    const progress = Number(job.progress || 0);
+    const checked = Number(job.total_checked || 0);
+    const total = Number(job.total_targets || 0);
+    const alive = Number(job.total_alive || 0);
+    const problematic = Number(job.total_problematic || 0);
+    const errors = Number(job.total_errors || 0);
+    const speed = Number(job.items_per_second || 0);
+
+    titleEl.textContent = `Job #${job.id} - ${job.status}`;
+    barEl.style.width = `${Math.max(0, Math.min(100, progress))}%`;
+    countEl.textContent = `${checked} / ${total || "?"}`;
+    aliveEl.textContent = `${alive}`;
+    problematicEl.textContent = `${problematic} / ${errors}`;
+    etaEl.textContent = formatDuration(job.eta_seconds);
+    currentEl.textContent = job.current_title || job.current_url || "Waiting for processing...";
+
+    const statusMessage = job.status_message || "Checking links...";
+    const speedLabel = speed > 0 ? ` at ${speed.toFixed(2)} links/sec` : "";
+    const elapsed = formatDuration(job.elapsed_seconds);
+    metaEl.textContent = `${statusMessage} Elapsed ${elapsed}${speedLabel}.`;
+    setStopState(job);
+
+    showDialog();
+  };
+
+  const fetchStatus = async () => {
+    if (!activeJobId) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/dead-links/jobs/${activeJobId}/status`, {
+        headers: { "Accept": "application/json" },
+      });
+      if (!response.ok) {
+        stopPolling();
+        return;
+      }
+      const job = await response.json();
+      renderStatus(job);
+      if (job.status === "done" || job.status === "failed" || job.status === "stopped") {
+        stopPolling();
+        setRunningState(false);
+        setStopState(null);
+
+        if (completionHandledFor === job.id) {
+          return;
+        }
+        completionHandledFor = job.id;
+
+        if (job.status === "done") {
+          const worked = Number(job.total_alive || 0);
+          const dead = Number(job.total_problematic || 0);
+          metaEl.textContent = `Dead-link check complete. Worked: ${worked}. Dead: ${dead}.`;
+        } else if (job.status === "stopped") {
+          metaEl.textContent = "Dead-link check stopped.";
+        }
+
+        setTimeout(() => {
+          window.location.reload();
+        }, 700);
+      }
+    } catch (_error) {
+      stopPolling();
+      setRunningState(false);
+    }
+  };
+
+  const startPolling = (jobId) => {
+    activeJobId = jobId;
+    setRunningState(true);
+    stopPolling();
+    fetchStatus();
+    pollingTimer = setInterval(fetchStatus, 900);
+  };
+
+  closeButton.addEventListener("click", () => {
+    hiddenManually = true;
+    dialog.classList.add("hidden");
+  });
+
+  stopButton?.addEventListener("click", async () => {
+    if (!activeJobId) {
+      return;
+    }
+    stopButton.disabled = true;
+    stopButton.classList.add("opacity-60");
+    try {
+      const response = await fetch(`/dead-links/jobs/${activeJobId}/stop`, {
+        method: "POST",
+        headers: {
+          "X-Requested-With": "XMLHttpRequest",
+          "Accept": "application/json",
+        },
+      });
+      if (!response.ok) {
+        throw new Error("Failed to request stop.");
+      }
+      metaEl.textContent = "Stop requested. Waiting for active checks to finish...";
+    } catch (_error) {
+      stopButton.disabled = false;
+      stopButton.classList.remove("opacity-60");
+    }
+  });
+
+  const submitScanRequest = async ({ url, body } = {}) => {
+    setRunningState(true);
+    hiddenManually = false;
+    showDialog();
+    titleEl.textContent = "Starting dead-link scan...";
+    metaEl.textContent = "Creating scan job...";
+
+    try {
+      const response = await fetch(url || form.action || window.location.pathname, {
+        method: "POST",
+        headers: {
+          "X-Requested-With": "XMLHttpRequest",
+          "Accept": "application/json",
+        },
+        body,
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.job || !payload.job.id) {
+        throw new Error(payload.error || "Failed to start scan.");
+      }
+      renderStatus(payload.job);
+      startPolling(payload.job.id);
+      return;
+    } catch (error) {
+      titleEl.textContent = "Scan failed to start";
+      metaEl.textContent = error.message || "Request failed.";
+      setRunningState(false);
+    }
+  };
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await submitScanRequest();
+  });
+
+  recheckSelectedForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (recheckSelectedButton?.disabled) {
+      return;
+    }
+    await submitScanRequest({
+      url: recheckSelectedForm.action,
+      body: new FormData(recheckSelectedForm),
+    });
+  });
+
+  if (activeJobId) {
+    hiddenManually = false;
+    startPolling(activeJobId);
+  } else {
+    setStopState(null);
+  }
+})();
+</script>
+
+<script>
+(() => {
+  const resultsEl = document.getElementById("dead-links-results");
+  const selectAllButton = document.getElementById("dead-links-select-all");
+  const recheckSelectedButton = document.getElementById("dead-links-recheck-selected");
+  const recheckSelectedInputsEl = document.getElementById("dead-links-recheck-selected-inputs");
+  const deleteSelectedButton = document.getElementById("dead-links-delete-selected");
+  const deleteSelectedForm = document.getElementById("dead-links-delete-selected-form");
+  const selectedInputsEl = document.getElementById("dead-links-selected-inputs");
+  const selectionCountEl = document.getElementById("dead-links-selection-count");
+
+  if (!resultsEl || !selectAllButton || !recheckSelectedButton || !recheckSelectedInputsEl || !deleteSelectedButton || !deleteSelectedForm || !selectedInputsEl || !selectionCountEl) {
+    return;
+  }
+
+  const selectedIds = new Set();
+  const interactiveSelector = "a, button, input, label, select, textarea, form";
+
+  const cards = () => Array.from(resultsEl.querySelectorAll("[data-dead-link-card]"));
+
+  const refreshSelectionUi = () => {
+    const count = selectedIds.size;
+    const scanRunning = document.getElementById("dead-link-submit")?.disabled;
+    selectionCountEl.textContent = `${count} selected`;
+    deleteSelectedButton.disabled = count === 0;
+    recheckSelectedButton.dataset.selectionCount = String(count);
+    recheckSelectedButton.disabled = Boolean(scanRunning) || count === 0;
+    selectedInputsEl.innerHTML = "";
+    recheckSelectedInputsEl.innerHTML = "";
+
+    selectedIds.forEach((id) => {
+      const deleteInput = document.createElement("input");
+      deleteInput.type = "hidden";
+      deleteInput.name = "bookmark_ids";
+      deleteInput.value = id;
+      selectedInputsEl.appendChild(deleteInput);
+
+      const recheckInput = document.createElement("input");
+      recheckInput.type = "hidden";
+      recheckInput.name = "bookmark_ids";
+      recheckInput.value = id;
+      recheckSelectedInputsEl.appendChild(recheckInput);
+    });
+  };
+
+  const syncSelection = () => {
+    cards().forEach((card) => {
+      const id = card.dataset.bookmarkId;
+      const checkbox = card.querySelector("[data-dead-link-select]");
+      if (!checkbox || !id) {
+        return;
+      }
+      checkbox.checked = selectedIds.has(id);
+      card.classList.toggle("ring-2", checkbox.checked);
+      card.classList.toggle("ring-emerald-300", checkbox.checked);
+    });
+    refreshSelectionUi();
+  };
+
+  const setSelectedState = (id, selected) => {
+    if (!id) {
+      return;
+    }
+    if (selected) {
+      selectedIds.add(String(id));
+    } else {
+      selectedIds.delete(String(id));
+    }
+    syncSelection();
+  };
+
+  resultsEl.addEventListener("change", (event) => {
+    const checkbox = event.target.closest("[data-dead-link-select]");
+    if (!checkbox) {
+      return;
+    }
+    setSelectedState(checkbox.value, checkbox.checked);
+  });
+
+  resultsEl.addEventListener("click", (event) => {
+    const card = event.target.closest("[data-dead-link-card]");
+    if (!card) {
+      return;
+    }
+    if (event.target.closest(interactiveSelector)) {
+      return;
+    }
+    const checkbox = card.querySelector("[data-dead-link-select]");
+    if (!checkbox) {
+      return;
+    }
+    setSelectedState(checkbox.value, !checkbox.checked);
+  });
+
+  selectAllButton.addEventListener("click", () => {
+    cards().forEach((card) => {
+      const id = card.dataset.bookmarkId;
+      if (id) {
+        selectedIds.add(id);
+      }
+    });
+    syncSelection();
+  });
+
+  deleteSelectedForm.addEventListener("submit", (event) => {
+    if (selectedIds.size === 0) {
+      event.preventDefault();
+      return;
+    }
+    if (!window.confirm(`Move ${selectedIds.size} selected dead link(s) to the recycle bin?`)) {
+      event.preventDefault();
+    }
+  });
+
+  syncSelection();
+})();
+</script>
+{% endblock %}

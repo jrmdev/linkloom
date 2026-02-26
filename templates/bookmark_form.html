@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %} · {% if item %}Edit{% else %}New{% endif %} Bookmark{% endblock %}
+{% block content %}
+<div class="max-w-3xl">
+  <h1 class="text-3xl font-bold mb-2">{% if item %}Edit{% else %}Add{% endif %} Bookmark</h1>
+  <p class="text-slate-600 mb-6">LinkLoom extracts and indexes text content for smart search.</p>
+
+  <form method="post" class="card bg-white/90 border border-slate-200 rounded-xl p-5 space-y-4">
+    {% if next_url %}
+    <input type="hidden" name="next" value="{{ next_url }}">
+    {% endif %}
+    <div>
+      <label class="block text-sm mb-1">URL</label>
+      <input name="url" type="url" required value="{{ item.url if item else '' }}" class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white">
+    </div>
+    <div>
+      <label class="block text-sm mb-1">Title</label>
+      <input name="title" type="text" value="{{ (item.title or '') if item else '' }}" class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white">
+    </div>
+    <div>
+      <label class="block text-sm mb-1">Folder</label>
+      <select name="folder_id" class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white mono">
+        <option value="">No folder</option>
+        {% for folder in folder_options %}
+        <option value="{{ folder.id }}" {% if item and item.folder_id == folder.id %}selected{% endif %}>{{ folder.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm mb-1">Tags (comma-separated)</label>
+      <input name="tags" type="text" value="{% if item %}{{ item.tags | map(attribute='name') | join(', ') }}{% endif %}" class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white">
+    </div>
+    <div>
+      <label class="block text-sm mb-1">Notes</label>
+      <textarea name="notes" rows="4" class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white">{{ (item.notes or '') if item else '' }}</textarea>
+    </div>
+    {% if item %}
+    <label class="flex items-center gap-2 text-sm text-slate-700">
+      <input type="checkbox" name="internal_link" value="1" class="rounded border-slate-300" {% if is_internal_link %}checked{% endif %}>
+      Internal link
+    </label>
+    <label class="flex items-center gap-2 text-sm text-slate-700">
+      <input type="checkbox" name="reindex" value="1" class="rounded border-slate-300">
+      Re-fetch and re-index content
+    </label>
+    {% endif %}
+    <div class="flex items-center gap-3">
+      <button class="text-white px-4 py-2.5 rounded-xl" style="background: var(--ll-accent);">Save</button>
+      <a href="{{ next_url if next_url else url_for('web.bookmarks') }}" class="px-4 py-2.5 rounded-xl bg-slate-100">Cancel</a>
+      {% if item %}
+      <button
+        type="submit"
+        formaction="{{ url_for('web.bookmarks_delete', bookmark_id=item.id) }}"
+        formmethod="post"
+        formnovalidate
+        onclick="return confirm('Move this bookmark to the recycle bin?');"
+        class="ml-auto px-4 py-2.5 rounded-xl text-white"
+        style="background: var(--ll-danger);"
+      >Delete</button>
+      {% endif %}
+    </div>
+  </form>
+</div>
+{% endblock %}

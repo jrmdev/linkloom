@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+{% block title %} · Import{% endblock %}
+{% block content %}
+<div class="max-w-4xl space-y-6">
+  <div>
+    <h1 class="text-3xl font-bold">Import Browser Bookmarks</h1>
+    <p class="text-slate-600">Upload the HTML export from your browser bookmark manager. LinkLoom now imports in the background, so you can keep browsing while progress updates live.</p>
+  </div>
+
+  <form id="import-form" method="post" enctype="multipart/form-data" class="card bg-white/90 border border-slate-200 rounded-xl p-5 space-y-4">
+    <input type="file" name="bookmark_file" accept=".html,text/html" required class="block w-full text-sm">
+    <button id="import-submit" class="text-white px-4 py-2.5 rounded-xl" style="background: var(--ll-accent-2);">Upload and Import</button>
+  </form>
+
+  <section class="card bg-white/90 border border-slate-200 rounded-xl p-5">
+    <h2 class="text-xl font-semibold mb-3">Recent Import Jobs</h2>
+    <div class="space-y-3">
+      {% for job in jobs %}
+      <div class="border border-slate-200 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div class="mono text-xs text-slate-500">JOB #{{ job.id }}</div>
+          <div class="font-medium">Status: {{ job.status }}</div>
+          <div class="text-sm text-slate-600">Created: {{ job.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+        </div>
+        <div class="text-sm">
+          <div>Progress: <span class="mono">{{ job.progress }}%</span></div>
+          <div>Added/Restored: <span class="mono">{{ job.total_created }}</span></div>
+          <div>Skipped: <span class="mono">{{ job.total_skipped }}</span></div>
+        </div>
+      </div>
+      {% else %}
+      <p class="text-slate-600">No imports yet.</p>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+<aside id="import-status-dialog" class="hidden fixed bottom-4 right-4 z-50 w-[min(92vw,420px)] card bg-white/95 border border-slate-200 rounded-2xl shadow-2xl p-4 space-y-3">
+  <div class="flex items-start justify-between gap-3">
+    <div>
+      <p class="mono text-[11px] tracking-wide text-slate-500">BACKGROUND IMPORT</p>
+      <h3 id="import-status-title" class="text-lg font-semibold">Preparing upload...</h3>
+    </div>
+    <button id="import-status-close" type="button" class="text-sm text-slate-500 hover:text-slate-800">Hide</button>
+  </div>
+
+  <div class="h-2 w-full rounded-full bg-slate-200 overflow-hidden">
+    <div id="import-status-bar" class="h-full rounded-full transition-all duration-300" style="width: 0%; background: linear-gradient(90deg, var(--ll-accent) 0%, var(--ll-accent-2) 100%);"></div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-2 text-sm">
+    <div class="rounded-lg bg-slate-50 border border-slate-200 p-2">
+      <div class="text-slate-500 text-xs">Processed</div>
+      <div id="import-status-count" class="mono text-base">0 / 0</div>
+    </div>
+    <div class="rounded-lg bg-slate-50 border border-slate-200 p-2">
+      <div class="text-slate-500 text-xs">ETA</div>
+      <div id="import-status-eta" class="mono text-base">--:--</div>
+    </div>
+    <div class="rounded-lg bg-slate-50 border border-slate-200 p-2">
+      <div class="text-slate-500 text-xs">Added/Restored</div>
+      <div id="import-status-created" class="mono text-base">0</div>
+    </div>
+    <div class="rounded-lg bg-slate-50 border border-slate-200 p-2">
+      <div class="text-slate-500 text-xs">Skipped/Failed</div>
+      <div id="import-status-errors" class="mono text-base">0 / 0</div>
+    </div>
+  </div>
+
+  <div class="rounded-lg border border-slate-200 bg-white px-3 py-2">
+    <div class="text-xs text-slate-500">Current bookmark</div>
+    <div id="import-status-current" class="text-sm break-words">Waiting for processing...</div>
+  </div>
+
+  <p id="import-status-meta" class="text-xs text-slate-500">Waiting for import job...</p>
+</aside>
+
+<script>
+(() => {
+  const form = document.getElementById("import-form");
+  const submitButton = document.getElementById("import-submit");
+  const dialog = document.getElementById("import-status-dialog");
+  const closeButton = document.getElementById("import-status-close");
+  const titleEl = document.getElementById("import-status-title");
+  const barEl = document.getElementById("import-status-bar");
+  const countEl = document.getElementById("import-status-count");
+  const etaEl = document.getElementById("import-status-eta");
+  const createdEl = document.getElementById("import-status-created");
+  const errorsEl = document.getElementById("import-status-errors");
+  const currentEl = document.getElementById("import-status-current");
+  const metaEl = document.getElementById("import-status-meta");
+
+  if (!form) {
+    return;
+  }
+
+  let pollingTimer = null;
+  let activeJobId = {{ active_job.id if active_job else 'null' }};
+  let hiddenManually = false;
+
+  const formatDuration = (seconds) => {
+    if (!Number.isFinite(seconds) || seconds < 0) {
+      return "--:--";
+    }
+    const safe = Math.max(0, Math.round(seconds));
+    const mins = Math.floor(safe / 60);
+    const secs = safe % 60;
+    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  };
+
+  const showDialog = () => {
+    if (!hiddenManually) {
+      dialog.classList.remove("hidden");
+    }
+  };
+
+  const setUploadingState = (uploading) => {
+    submitButton.disabled = uploading;
+    submitButton.classList.toggle("opacity-60", uploading);
+    submitButton.classList.toggle("cursor-not-allowed", uploading);
+    submitButton.textContent = uploading ? "Starting Import..." : "Upload and Import";
+  };
+
+  const stopPolling = () => {
+    if (pollingTimer) {
+      clearInterval(pollingTimer);
+      pollingTimer = null;
+    }
+  };
+
+  const renderStatus = (job) => {
+    const progress = Number(job.progress || 0);
+    const processed = Number(job.processed_items || 0);
+    const total = Number(job.total_items || 0);
+    const created = Number(job.total_created || 0);
+    const skipped = Number(job.total_skipped || 0);
+    const failed = Number(job.total_failed || 0);
+    const speed = Number(job.items_per_second || 0);
+
+    titleEl.textContent = `Job #${job.id} - ${job.status}`;
+    barEl.style.width = `${Math.max(0, Math.min(100, progress))}%`;
+    countEl.textContent = `${processed} / ${total || "?"}`;
+    createdEl.textContent = `${created}`;
+    errorsEl.textContent = `${skipped} / ${failed}`;
+    etaEl.textContent = formatDuration(job.eta_seconds);
+    currentEl.textContent = job.current_title || job.current_url || "Waiting for processing...";
+
+    const statusMessage = job.status_message || "Running import...";
+    const speedLabel = speed > 0 ? ` at ${speed.toFixed(2)} bookmarks/sec` : "";
+    const elapsed = formatDuration(job.elapsed_seconds);
+    metaEl.textContent = `${statusMessage} Elapsed ${elapsed}${speedLabel}.`;
+
+    showDialog();
+  };
+
+  const fetchStatus = async () => {
+    if (!activeJobId) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/import/jobs/${activeJobId}/status`, {
+        headers: { "Accept": "application/json" },
+      });
+      if (!response.ok) {
+        stopPolling();
+        return;
+      }
+      const job = await response.json();
+      renderStatus(job);
+      if (job.status === "done" || job.status === "failed") {
+        stopPolling();
+        setUploadingState(false);
+        setTimeout(() => {
+          window.location.reload();
+        }, 900);
+      }
+    } catch (_error) {
+      stopPolling();
+      setUploadingState(false);
+    }
+  };
+
+  const startPolling = (jobId) => {
+    activeJobId = jobId;
+    stopPolling();
+    fetchStatus();
+    pollingTimer = setInterval(fetchStatus, 900);
+  };
+
+  closeButton.addEventListener("click", () => {
+    hiddenManually = true;
+    dialog.classList.add("hidden");
+  });
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    setUploadingState(true);
+    hiddenManually = false;
+    showDialog();
+    titleEl.textContent = "Uploading bookmarks...";
+    metaEl.textContent = "Creating import job...";
+
+    try {
+      const response = await fetch(form.action || window.location.pathname, {
+        method: "POST",
+        body: new FormData(form),
+        headers: {
+          "X-Requested-With": "XMLHttpRequest",
+          "Accept": "application/json",
+        },
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.job || !payload.job.id) {
+        throw new Error(payload.error || "Import upload failed.");
+      }
+      renderStatus(payload.job);
+      form.reset();
+      startPolling(payload.job.id);
+    } catch (error) {
+      titleEl.textContent = "Import failed to start";
+      metaEl.textContent = error.message || "Upload request failed.";
+      setUploadingState(false);
+    }
+  });
+
+  if (activeJobId) {
+    hiddenManually = false;
+    startPolling(activeJobId);
+  }
+})();
+</script>
+{% endblock %}

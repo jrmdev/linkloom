@@ -1,0 +1,13 @@
+linkloom.db
+
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+tasks/
+*.egg-info
+
+# Virtual environments
+.venv

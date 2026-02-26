@@ -1,0 +1,14 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8072:8072"
+    environment:
+      SECRET_KEY: ${SECRET_KEY:-default-secret-key}
+    volumes:
+      - linkloom-data:/data
+
+volumes:
+  linkloom-data:

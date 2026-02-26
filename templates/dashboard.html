@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %} · Dashboard{% endblock %}
+{% block content %}
+{% macro render_folder_node(folder) %}
+  <li class="pl-4 border-l border-slate-200">
+    <details>
+      <summary class="cursor-pointer select-none font-medium text-slate-800 py-1">{{ folder.name }}</summary>
+      <div class="space-y-2 mt-2">
+        {% for bm in bookmarks_by_folder.get(folder.id, []) %}
+          <div class="rounded-md border border-slate-200 bg-white px-3 py-2">
+            <a href="{{ bm.url }}" target="_blank" class="text-sm text-slate-700 hover:underline break-all">{{ bm.title or bm.url }}</a>
+          </div>
+        {% endfor %}
+        {% if children_by_parent.get(folder.id) %}
+        <ul class="space-y-2">
+          {% for child in children_by_parent.get(folder.id, []) %}
+            {{ render_folder_node(child) }}
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+    </details>
+  </li>
+{% endmacro %}
+
+<div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+  <div>
+    <h1 class="text-3xl font-bold">Dashboard</h1>
+    <p class="text-slate-600">A fast overview of your LinkLoom library.</p>
+  </div>
+  <div class="flex items-center gap-2">
+    <a href="{{ url_for('web.export_browser_html') }}" class="px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-50">Export HTML</a>
+    <a href="{{ url_for('web.bookmarks_new') }}" class="text-white px-4 py-2.5 rounded-xl" style="background: var(--ll-accent);">Add Bookmark</a>
+  </div>
+</div>
+
+<div class="grid sm:grid-cols-3 gap-4 mb-6">
+  <div class="card bg-white/90 border border-slate-200 rounded-xl p-5">
+    <p class="mono text-xs text-slate-500">ACTIVE</p>
+    <p class="text-3xl font-bold mt-1">{{ total }}</p>
+  </div>
+  <div class="card bg-white/90 border border-slate-200 rounded-xl p-5">
+    <p class="mono text-xs text-slate-500">RECYCLE BIN</p>
+    <p class="text-3xl font-bold mt-1">{{ deleted }}</p>
+  </div>
+  <div class="card bg-white/90 border border-slate-200 rounded-xl p-5">
+    <p class="mono text-xs text-slate-500">DEAD / UNSTABLE</p>
+    <p class="text-3xl font-bold mt-1">{{ dead }}</p>
+  </div>
+</div>
+
+<div class="grid lg:grid-cols-2 gap-6">
+  <section class="card bg-white/90 border border-slate-200 rounded-xl p-5">
+    <h2 class="text-xl font-semibold mb-3">Browse by Folder</h2>
+
+    {% if bookmarks_by_folder.get(None, []) %}
+      <div class="mb-4">
+        <p class="mono text-xs text-slate-500 mb-2">ROOT LINKS</p>
+        <div class="space-y-2">
+          {% for bm in bookmarks_by_folder.get(None, []) %}
+            <div class="rounded-md border border-slate-200 bg-white px-3 py-2">
+              <a href="{{ bm.url }}" target="_blank" class="text-sm text-slate-700 hover:underline break-all">{{ bm.title or bm.url }}</a>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    {% if children_by_parent.get(None) %}
+      <ul class="space-y-2">
+        {% for folder in children_by_parent.get(None, []) %}
+          {{ render_folder_node(folder) }}
+        {% endfor %}
+      </ul>
+    {% elif not bookmarks_by_folder.get(None, []) %}
+      <p class="text-slate-600">No bookmarks yet. Start by importing from your browser or adding one manually.</p>
+    {% endif %}
+  </section>
+
+  <section class="card bg-white/90 border border-slate-200 rounded-xl p-5">
+    <h2 class="text-xl font-semibold mb-3">Recently Updated</h2>
+    {% if recent %}
+    <div class="space-y-3">
+      {% for bm in recent %}
+        <div class="border border-slate-200 rounded-lg p-3 flex items-center justify-between gap-3">
+          <div>
+            <div class="font-medium">{{ bm.title or "(untitled)" }}</div>
+            <a href="{{ bm.url }}" target="_blank" class="text-sm text-slate-600 hover:underline break-all">{{ bm.url }}</a>
+          </div>
+          <span class="text-xs mono text-slate-500">{{ bm.updated_at.strftime('%Y-%m-%d %H:%M') }}</span>
+        </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-slate-600">No recent updates yet.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
